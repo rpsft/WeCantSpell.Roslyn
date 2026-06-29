@@ -1,0 +1,157 @@
+include:
+  - component: $CI_SERVER_FQDN/open-source/ci-components/ultimate-auto-semversioning@0.1.5
+
+variables:
+  # Opt out of telemetry, see https://consoledonottrack.com/
+  DO_NOT_TRACK: 1
+  # Nupkg folder
+  NUPKG_FOLDER: ".packages"
+  NUGET_SOURCE: https://nuget.rapidsoft.ru/nuget/Rapidsoft-Nuget/v3/index.json
+  # All console output of dotnet should be in English
+  LANG: C
+  LCID: 1033
+  # Disable dotnet first time experience
+  DOTNET_NOLOGO: true
+  # Disable Husky in dotnet tools restore
+  HUSKY: 0
+  # Default package version, can be overridden for tag commits
+  PACKAGE_VERSION: ${GitVersion_MajorMinorPatch}-build.${CI_PIPELINE_IID}
+
+workflow:
+  auto_cancel:
+    on_new_commit: interruptible
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_COMMIT_MESSAGE =~ /^chore\(version bump\).*/
+      when: never
+    # Run for merge request commits
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # Avoid duplicates for merge requests
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    # Launch for any branch commit
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "web"
+    # Tag pipelines are disabled: release_job handles build, NuGet push and tag creation directly
+    - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/
+      when: never
+
+default:
+  image: $CI_REGISTRY/open-source/dotnet-docker/sdk-10.0:1.6.1
+  interruptible: true
+
+build:
+  needs: [get_unique_semversion]
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  script:
+    - |
+      echo "Building version ${PACKAGE_VERSION}"
+      dotnet restore
+      dotnet build --no-restore -c Release -p:Version=$PACKAGE_VERSION
+      dotnet pack --no-build --no-restore -c Release -p:Version=$PACKAGE_VERSION -o $NUPKG_FOLDER --include-symbols --include-source
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - "$NUPKG_FOLDER/"
+
+test:
+  needs: [get_unique_semversion]
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  before_script:
+    - dotnet build -c Release -p:Version=$PACKAGE_VERSION
+  script:
+    - >
+      dotnet test --no-build --configuration=Release
+      --logger="console;verbosity=detailed"
+      --logger="junit;LogFilePath=../artifacts/{assembly}-test-result.xml;MethodFormat=Class;FailureBodyFormat=Verbose"
+      --collect="XPlat Code Coverage"
+  after_script:
+    - dotnet tool install dotnet-reportgenerator-globaltool --tool-path .tools || true
+    - .tools/reportgenerator "-reports:./**/*.cobertura.xml" "-targetdir:.coverage" -reportTypes:TextSummary || true
+    - cat .coverage/Summary.txt || true
+  coverage: /Line coverage:[\s\S].+%/
+  artifacts:
+    when: always
+    paths:
+      - ./**/*test-result.xml
+    reports:
+      junit:
+        - ./**/*test-result.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: ./**/coverage.cobertura.xml
+
+publish:internal:
+  interruptible: false
+  needs:
+    - get_unique_semversion
+    - build
+    - test
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/
+      when: on_success
+    - when: manual
+      allow_failure: true
+  script:
+    - echo "Publishing version $PACKAGE_VERSION internally to $NUGET_SOURCE"
+    - dotnet nuget push "$NUPKG_FOLDER/*.nupkg" --source $NUGET_SOURCE --api-key $NUGET_API_KEY
+
+# `artifacts: false` on build/test dependencies is deliberate: without it,
+# the build job's SemVer-tagged .nupkg files (e.g. *.1.18.1-15.nupkg) would
+# land in $NUPKG_FOLDER alongside our release-version packages, and the
+# `dotnet nuget push *.nupkg` below would push both versions. We want a clean
+# folder so only RELEASE_VERSION packages exist when we push.
+.release_base:
+  interruptible: false
+  allow_failure: true
+  variables:
+    GIT_SUBMODULE_STRATEGY: recursive
+  needs:
+    - get_unique_semversion
+    - job: build
+      artifacts: false
+    - job: test
+      artifacts: false
+  script:
+    - echo "Releasing version $RELEASE_VERSION"
+    - dotnet restore
+    - dotnet build --no-restore -c Release -p:Version=$RELEASE_VERSION
+    - dotnet pack --no-build --no-restore -c Release -p:Version=$RELEASE_VERSION -o $NUPKG_FOLDER --include-symbols --include-source
+    - dotnet nuget push "$NUPKG_FOLDER/*.nupkg" --source $NUGET_SOURCE --api-key $NUGET_API_KEY
+    - |
+      NUGET_HOST="${NUGET_SOURCE%%/nuget/*}"
+      NUGET_FEED="${NUGET_SOURCE#*/nuget/}"; NUGET_FEED="${NUGET_FEED%%/*}"
+      LINKS=""
+      for pkg in "$NUPKG_FOLDER"/*.nupkg; do
+        [[ "$pkg" == *.symbols.nupkg ]] && continue
+        filename=$(basename "$pkg" .nupkg)
+        pkg_id="${filename%.${RELEASE_VERSION}}"
+        [ -n "$LINKS" ] && LINKS="${LINKS},"
+        LINKS="${LINKS}{\"name\":\"${pkg_id}\",\"url\":\"${NUGET_HOST}/feeds/${NUGET_FEED}/${pkg_id}/${RELEASE_VERSION}\",\"link_type\":\"package\"}"
+      done
+      curl --fail --request POST \
+        --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data "{\"tag_name\":\"${RELEASE_VERSION}\",\"name\":\"Release ${RELEASE_VERSION}\",\"ref\":\"${CI_COMMIT_SHA}\",\"generate_release_notes\":true,\"assets\":{\"links\":[${LINKS}]}}" \
+        "${CI_SERVER_URL}/api/v4/projects/${CI_PROJECT_ID}/releases"
+
+release_job:
+  extends: .release_base
+  rules:
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: true
+  before_script:
+    - RELEASE_VERSION="${GitVersion_MajorMinorPatch}"
+
+release_new_version_job:
+  extends: .release_base
+  rules:
+    - if: '$CI_COMMIT_REF_PROTECTED == "true"'
+      when: manual
+      allow_failure: true
+  before_script:
+    - RELEASE_VERSION="${GitVersion_Major}.$((GitVersion_Minor + 1)).0"

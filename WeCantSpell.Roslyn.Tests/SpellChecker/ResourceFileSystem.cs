@@ -17,19 +17,21 @@ namespace WeCantSpell.Roslyn.Tests.SpellChecker
             return "";
         }
 
-        public string GetParentDirectory(string directory)
+        public string? GetParentDirectory(string directory)
         {
             return null;
         }
 
-        private static Stream OpenCodeFileStream(string embeddedResourceFileName) =>
+        private static Stream? OpenCodeFileStream(string embeddedResourceFileName) =>
             typeof(CSharpTestBase)
                 .GetTypeInfo()
                 .Assembly.GetManifestResourceStream(s_pathBase + "." + embeddedResourceFileName);
 
-        public string ReadAllText(string filePath)
+        public string? ReadAllText(string filePath)
         {
             using var stream = OpenCodeFileStream(filePath);
+            if (stream == null)
+                return null;
             using var reader = new StreamReader(stream, Encoding.UTF8, true);
             return reader.ReadToEnd();
         }

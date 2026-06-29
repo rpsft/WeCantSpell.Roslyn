@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <AssemblyTitle>WeCantSpell.Roslyn</AssemblyTitle>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -34,8 +33,9 @@
     </PackageReference>
   </ItemDefinitionGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  <PropertyGroup>
+    <!-- Pack the build/ props explicitly (below); keep it out of the implicit None glob to avoid duplicates. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);build\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,9 +43,25 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- MSBuild logic that auto-adds spell-check dictionaries/config to @(AdditionalFiles) in consuming projects. -->
+    <None
+      Include="build\WeCantSpell.Roslyn.props"
+      Pack="true"
+      PackagePath="build\WeCantSpell.Roslyn.props"
+      Visible="false"
+    />
+    <None
+      Include="build\WeCantSpell.Roslyn.props"
+      Pack="true"
+      PackagePath="buildTransitive\WeCantSpell.Roslyn.props"
+      Visible="false"
+    />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\SharedAssemblyInfo.cs" Link="Properties\SharedAssemblyInfo.cs" />
   </ItemGroup>
-  
+
   <ItemGroup>
     <None Include="..\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
@@ -58,13 +74,16 @@
 
   <ItemGroup>
     <!-- Generator dependencies -->
-    <PackageReference Include="WeCantSpell.Hunspell" Version="4.0.0" GeneratePathProperty="true" />
+    <PackageReference Include="WeCantSpell.Hunspell" Version="7.0.1" GeneratePathProperty="true" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" GeneratePathProperty="true" />
   </ItemGroup>
-    <ItemGroup>
-        <EmbeddedResource Include="$(PKGWeCantSpell_Hunspell)\lib\netstandard2.0\WeCantSpell.Hunspell.dll" Visible="false" />
-        <EmbeddedResource Include="$(PKGNewtonsoft_Json)\lib\netstandard2.0\Newtonsoft.Json.dll" Visible="false" />
-    </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource
+      Include="$(PKGWeCantSpell_Hunspell)\lib\netstandard2.0\WeCantSpell.Hunspell.dll"
+      Visible="false"
+    />
+    <EmbeddedResource Include="$(PKGNewtonsoft_Json)\lib\netstandard2.0\Newtonsoft.Json.dll" Visible="false" />
+  </ItemGroup>
   <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
@@ -91,7 +110,10 @@
     <GZip BasePath=".." Files="@(Language)" OutputPath="$(IntermediateOutputPath)">
       <Output ItemName="GZipEmbeddedResource" TaskParameter="Result" />
     </GZip>
-    <Message Text="Compiled: %(GZipEmbeddedResource.Identity) - %(GZipEmbeddedResource.LogicalName)" Importance="high" />
+    <Message
+      Text="Compiled: %(GZipEmbeddedResource.Identity) - %(GZipEmbeddedResource.LogicalName)"
+      Importance="high"
+    />
     <ItemGroup>
       <EmbeddedResource Include="@(GZipEmbeddedResource)" />
     </ItemGroup>

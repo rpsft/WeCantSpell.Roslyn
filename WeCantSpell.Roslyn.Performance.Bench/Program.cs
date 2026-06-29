@@ -6,6 +6,7 @@ using BenchmarkDotNet.Loggers;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
 using Perfolizer.Horology;
+using Perfolizer.Metrology;
 
 namespace WeCantSpell.Roslyn.Performance.Bench
 {

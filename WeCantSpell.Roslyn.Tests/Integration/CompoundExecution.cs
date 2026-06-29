@@ -1,10 +1,10 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.Diagnostics;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Build.Locator;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.MSBuild;
 using WeCantSpell.Roslyn.Tests.Utilities;
 
@@ -13,7 +13,7 @@ namespace WeCantSpell.Roslyn.Tests.Integration
     [TestCategory("Compound")]
     public class CompoundExecution
     {
-        private static string SearchForFile(string fileName)
+        private static string? SearchForFile(string fileName)
         {
             var directory = new DirectoryInfo(".");
             do
@@ -45,16 +45,14 @@ namespace WeCantSpell.Roslyn.Tests.Integration
         }
 
         [Fact]
-        public void ShouldCheckSolution()
+        public async Task ShouldCheckSolution()
         {
             var analyzer = new SpellingAnalyzerCSharp(LengthWordChecker.Four);
-            Task.WhenAll(_solution.Projects.Select(p => FindSpellingMistakesForProject(p, analyzer)))
-                .GetAwaiter()
-                .GetResult();
+            await Task.WhenAll(_solution.Projects.Select(p => FindSpellingMistakesForProject(p, analyzer)));
         }
 
         [Fact]
-        public async void ShouldCheckSingleProject()
+        public async Task ShouldCheckSingleProject()
         {
             var analyzer = new SpellingAnalyzerCSharp();
             var project = _solution.Projects.First(p => p.Name.EndsWith("Roslyn"));
@@ -69,7 +67,7 @@ namespace WeCantSpell.Roslyn.Tests.Integration
         {
             var compilation = await project.GetCompilationAsync().ConfigureAwait(false);
             var diagnostics = await (compilation ?? throw new InvalidOperationException())
-                .WithAnalyzers(ImmutableArray.Create(analyzer))
+                .WithAnalyzers([analyzer])
                 .GetAnalyzerDiagnosticsAsync()
                 .ConfigureAwait(false);
 
@@ -84,7 +82,7 @@ namespace WeCantSpell.Roslyn.Tests.Integration
 
             private int Length { get; }
 
-            public bool Check(string word) => word != null && word.Length % Length != 0;
+            public bool Check(string? word) => word != null && word.Length % Length != 0;
 
             public IEnumerable<string> Suggest(string word) => Enumerable.Empty<string>();
         }

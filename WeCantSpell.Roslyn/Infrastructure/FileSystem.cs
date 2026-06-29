@@ -22,7 +22,7 @@ namespace WeCantSpell.Roslyn.Infrastructure
             return parentDirectoryInfo?.FullName;
         }
 
-        public string ReadAllText(string filePath)
+        public string? ReadAllText(string filePath)
         {
             return File.ReadAllText(filePath);
         }

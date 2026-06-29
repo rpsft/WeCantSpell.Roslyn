@@ -1,5 +1,4 @@
 ﻿using System.Threading.Tasks;
-using FluentAssertions.Execution;
 using WeCantSpell.Roslyn.Tests.Utilities;
 
 namespace WeCantSpell.Roslyn.Tests.Integration.CSharp.Parsing
@@ -12,7 +11,7 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp.Parsing
                 new object[] { "Count", 9, 17 },
                 new object[] { "Distance", 10, 17 },
                 new object[] { "Nested", 11, 17 },
-                new object[] { "Value", 13, 21 }
+                new object[] { "Value", 13, 21 },
             };
 
         [Theory, MemberData(nameof(CanFindMistakesInAnonymousMembersData))]

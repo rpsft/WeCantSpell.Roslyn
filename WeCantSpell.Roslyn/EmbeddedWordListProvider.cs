@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -13,12 +14,21 @@ namespace WeCantSpell.Roslyn
     {
         public WordList WordList { get; }
 
+        // Embedded dictionaries never change, so they can be decompressed once and reused for the
+        // lifetime of the process. This keeps building per-tree spell checkers cheap.
+        private static readonly ConcurrentDictionary<string, EmbeddedWordListProvider> s_cache = new();
+
         private EmbeddedWordListProvider(WordList wordList)
         {
             WordList = wordList;
         }
 
         public static EmbeddedWordListProvider Load(string languageCode)
+        {
+            return s_cache.GetOrAdd(languageCode, LoadCore);
+        }
+
+        private static EmbeddedWordListProvider LoadCore(string languageCode)
         {
             const string resourceNamespaceBase = "";
             string languageResourceName = resourceNamespaceBase + languageCode;

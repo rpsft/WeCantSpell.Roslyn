@@ -1,27 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <TargetFramework>net6.0</TargetFramework>
-        <OutputType>Exe</OutputType>
-        <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    </PropertyGroup>
-    <ItemGroup>
-        <PackageReference Include="BenchmarkDotNet" Version="0.13.5" />
-        <PackageReference Include="Microsoft.Build.Locator" Version="1.5.5" />
-        <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.5.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.5.0" />
-    </ItemGroup>
-    <PropertyGroup>
-        <RootNamespace>WeCantSpell.Roslyn.Performance.Bench</RootNamespace>
-        <AssemblyName>WeCantSpell.Roslyn.Performance.Bench</AssemblyName>
-        <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-        <FileAlignment>512</FileAlignment>
-        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-        <NuGetPackageImportStamp>
-        </NuGetPackageImportStamp>
-        <TargetFrameworkProfile />
-    </PropertyGroup>
-    <ItemGroup>
-        <ProjectReference Include="..\WeCantSpell.Roslyn\WeCantSpell.Roslyn.csproj" />
-    </ItemGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <RootNamespace>WeCantSpell.Roslyn.Performance.Bench</RootNamespace>
+    <AssemblyName>WeCantSpell.Roslyn.Performance.Bench</AssemblyName>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.0" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
+    <!-- Pin transitive MSBuild task assembly to a patched version (CVE-2025-26646); runtime
+             MSBuild comes from the SDK via MSBuildLocator. -->
+    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.14.28" ExcludeAssets="runtime" />
+    <!-- Pin transitive crypto assembly pulled by the MSBuild task chain to a patched version
+             (CVE-2026-33116 / CVE-2026-26171). -->
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WeCantSpell.Roslyn\WeCantSpell.Roslyn.csproj" />
+  </ItemGroup>
 </Project>

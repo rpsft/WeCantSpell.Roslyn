@@ -1,0 +1,92 @@
+<Project>
+  <!--
+    WeCantSpell.Roslyn
+
+    Exposes the spell-check dictionaries (.spelling.dic / .directory.dic / .wecantspell.dic) and
+    configuration (.wecantspell / .wecantspell.json) to the analyzer as @(AdditionalFiles).
+
+    Doing so makes them tracked compilation inputs, so editing a dictionary invalidates the
+    analyzer's cached results and triggers re-analysis on the next normal build - no
+    'dotnet build-server shutdown' required.
+
+    Both files under the project directory and the nearest matching file at or above the project
+    directory (e.g. a repository-root .directory.dic) are included.
+
+    To manage @(AdditionalFiles) yourself, set:
+        <WeCantSpellAddAdditionalFiles>false</WeCantSpellAddAdditionalFiles>
+  -->
+
+  <PropertyGroup>
+    <WeCantSpellAddAdditionalFiles Condition="'$(WeCantSpellAddAdditionalFiles)' == ''"
+      >true</WeCantSpellAddAdditionalFiles>
+  </PropertyGroup>
+
+  <!--
+    Resolve the nearest matching dictionary/config at or above the project directory.
+
+    These are computed here, in a PropertyGroup, rather than inline in the item Conditions below,
+    because MSBuild's condition parser cannot tokenize a property function whose string arguments
+    are single-quoted when the whole function call is itself wrapped in a single-quoted condition
+    expression - it reads "'$([MSBuild]::GetPathOfFileAbove('" as a string literal and then trips
+    over the next character (MSB4092). Assigned to a property first, the Condition only has to
+    compare a plain '$(prop)' value.
+  -->
+  <PropertyGroup Condition="'$(WeCantSpellAddAdditionalFiles)' == 'true'">
+    <_WeCantSpellSpellingDicAbove>$([MSBuild]::GetPathOfFileAbove('.spelling.dic', '$(MSBuildProjectDirectory)'))</_WeCantSpellSpellingDicAbove>
+    <_WeCantSpellDirectoryDicAbove>$([MSBuild]::GetPathOfFileAbove('.directory.dic', '$(MSBuildProjectDirectory)'))</_WeCantSpellDirectoryDicAbove>
+    <_WeCantSpellWordsDicAbove>$([MSBuild]::GetPathOfFileAbove('.wecantspell.dic', '$(MSBuildProjectDirectory)'))</_WeCantSpellWordsDicAbove>
+    <_WeCantSpellConfigAbove>$([MSBuild]::GetPathOfFileAbove('.wecantspell', '$(MSBuildProjectDirectory)'))</_WeCantSpellConfigAbove>
+    <_WeCantSpellConfigJsonAbove>$([MSBuild]::GetPathOfFileAbove('.wecantspell.json', '$(MSBuildProjectDirectory)'))</_WeCantSpellConfigJsonAbove>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(WeCantSpellAddAdditionalFiles)' == 'true'">
+    <!-- Dictionaries and config at or below the project directory (build output excluded). -->
+    <_WeCantSpellFile
+      Include="$(MSBuildProjectDirectory)/**/.spelling.dic"
+      Exclude="$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**"
+    />
+    <_WeCantSpellFile
+      Include="$(MSBuildProjectDirectory)/**/.directory.dic"
+      Exclude="$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**"
+    />
+    <_WeCantSpellFile
+      Include="$(MSBuildProjectDirectory)/**/.wecantspell.dic"
+      Exclude="$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**"
+    />
+    <_WeCantSpellFile
+      Include="$(MSBuildProjectDirectory)/**/.wecantspell"
+      Exclude="$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**"
+    />
+    <_WeCantSpellFile
+      Include="$(MSBuildProjectDirectory)/**/.wecantspell.json"
+      Exclude="$(MSBuildProjectDirectory)/bin/**;$(MSBuildProjectDirectory)/obj/**"
+    />
+
+    <!-- Nearest matching file at or above the project directory (covers solution/repository-root dictionaries). -->
+    <_WeCantSpellFile Include="$(_WeCantSpellSpellingDicAbove)" Condition="'$(_WeCantSpellSpellingDicAbove)' != ''" />
+    <_WeCantSpellFile Include="$(_WeCantSpellDirectoryDicAbove)" Condition="'$(_WeCantSpellDirectoryDicAbove)' != ''" />
+    <_WeCantSpellFile Include="$(_WeCantSpellWordsDicAbove)" Condition="'$(_WeCantSpellWordsDicAbove)' != ''" />
+    <_WeCantSpellFile Include="$(_WeCantSpellConfigAbove)" Condition="'$(_WeCantSpellConfigAbove)' != ''" />
+    <_WeCantSpellFile Include="$(_WeCantSpellConfigJsonAbove)" Condition="'$(_WeCantSpellConfigJsonAbove)' != ''" />
+
+    <!-- De-duplicate (a project-directory file may match both a glob and the upward search). -->
+    <AdditionalFiles Include="@(_WeCantSpellFile->Distinct())" />
+  </ItemGroup>
+
+  <Target
+    Name="_WeCantSpellReportAdditionalFiles"
+    BeforeTargets="CoreCompile"
+    Condition="'$(WeCantSpellAddAdditionalFiles)' == 'true' and '$(WeCantSpellDebug)' == 'true'"
+  >
+    <Message
+      Importance="high"
+      Text="WeCantSpell.Roslyn dictionary/config file: %(_WeCantSpellFile.Identity)"
+      Condition="'@(_WeCantSpellFile)' != ''"
+    />
+    <Message
+      Importance="high"
+      Text="WeCantSpell.Roslyn: no dictionary or config files found for $(MSBuildProjectName)."
+      Condition="'@(_WeCantSpellFile)' == ''"
+    />
+  </Target>
+</Project>

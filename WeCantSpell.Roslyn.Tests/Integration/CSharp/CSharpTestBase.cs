@@ -34,7 +34,7 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp
         private static Stream OpenCodeFileStream(string embeddedResourceFileName) =>
             typeof(CSharpTestBase)
                 .GetTypeInfo()
-                .Assembly.GetManifestResourceStream(s_pathBase + "." + embeddedResourceFileName);
+                .Assembly.GetManifestResourceStream(s_pathBase + "." + embeddedResourceFileName)!;
 
         private static async Task<string> ReadCodeFileAsStringAsync(string embeddedResourceFileName)
         {
@@ -59,8 +59,8 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp
         {
             var projectId = ProjectId.CreateNewId(debugName: s_projectNameSingleFileSample);
 
-            var solution = new AdhocWorkspace().CurrentSolution
-                .AddProject(
+            var solution = new AdhocWorkspace()
+                .CurrentSolution.AddProject(
                     projectId,
                     s_projectNameSingleFileSample,
                     s_projectNameSingleFileSample,
@@ -79,7 +79,53 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp
 #pragma warning restore CS0618
             }
 
-            return solution.GetProject(projectId);
+            return solution.GetProject(projectId)!;
+        }
+
+        /// <summary>
+        /// Creates a project from raw source code plus optional dictionary/config files declared as
+        /// Roslyn <c>AdditionalFiles</c> (with real file paths so directory resolution works).
+        /// </summary>
+        protected static Project CreateProjectWithCode(
+            string code,
+            string codeFilePath,
+            params (string Path, string Content)[] additionalFiles
+        )
+        {
+            var projectId = ProjectId.CreateNewId(debugName: s_projectNameSingleFileSample);
+
+            var solution = new AdhocWorkspace()
+                .CurrentSolution.AddProject(
+                    projectId,
+                    s_projectNameSingleFileSample,
+                    s_projectNameSingleFileSample,
+                    LanguageNames.CSharp
+                )
+                .AddMetadataReference(projectId, s_corlibReference)
+                .AddMetadataReference(projectId, s_systemCoreReference)
+                .AddMetadataReference(projectId, s_cSharpSymbolsReference)
+                .AddMetadataReference(projectId, s_codeAnalysisReference);
+
+            var documentId = DocumentId.CreateNewId(projectId, debugName: codeFilePath);
+            solution = solution.AddDocument(
+                documentId,
+                Path.GetFileName(codeFilePath),
+                SourceText.From(code),
+                filePath: codeFilePath
+            );
+
+            foreach (var (path, content) in additionalFiles)
+            {
+                var additionalDocumentId = DocumentId.CreateNewId(projectId, debugName: path);
+                solution = solution.AddAdditionalDocument(
+                    additionalDocumentId,
+                    Path.GetFileName(path),
+                    SourceText.From(content),
+                    filePath: path
+                );
+            }
+
+            return solution.GetProject(projectId)!;
         }
 
         protected static Task<IEnumerable<Diagnostic>> GetDiagnosticsAsync(
@@ -95,7 +141,8 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp
             var compilation =
                 await project.GetCompilationAsync()
                 ?? throw new InvalidOperationException("Cann't get project complication");
-            return await compilation.WithAnalyzers(analyzers).GetAnalyzerDiagnosticsAsync();
+            // Pass the project's AnalyzerOptions so AdditionalFiles reach the analyzer.
+            return await compilation.WithAnalyzers(analyzers, project.AnalyzerOptions).GetAnalyzerDiagnosticsAsync();
         }
     }
 }

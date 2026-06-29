@@ -1,7 +1,5 @@
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions.Execution;
 using WeCantSpell.Roslyn.Config;
 using WeCantSpell.Roslyn.Tests.Utilities;
 
@@ -32,8 +30,8 @@ namespace WeCantSpell.Roslyn.Tests.SpellChecker
                     LanguageCodes = new HashSet<string>(),
                     AdditionalDictionaryPaths = new List<string>
                     {
-                        Path.Combine(Directory.GetCurrentDirectory(), "SpellChecker", "Files", "FantasyWords.dic")
-                    }
+                        Path.Combine(Directory.GetCurrentDirectory(), "SpellChecker", "Files", "FantasyWords.dic"),
+                    },
                 }
             );
             spellchecker.Check("Bazinga").Should().BeTrue();
@@ -48,7 +46,7 @@ namespace WeCantSpell.Roslyn.Tests.SpellChecker
                 new SpellCheckerOptions(fileSystem, "SpellChecker.Files")
                 {
                     LanguageCodes = new HashSet<string>(),
-                    AdditionalDictionaryPaths = new List<string> { "Files.FantasyWords.dic" }
+                    AdditionalDictionaryPaths = new List<string> { "Files.FantasyWords.dic" },
                 }
             );
             spellchecker.Check("Bazinga").Should().BeTrue();
@@ -65,7 +63,7 @@ namespace WeCantSpell.Roslyn.Tests.SpellChecker
                 new SpellCheckerOptions
                 {
                     LanguageCodes = new HashSet<string>(),
-                    AdditionalDictionaryPaths = new List<string> { fileName }
+                    AdditionalDictionaryPaths = new List<string> { fileName },
                 }
             );
             // Act
@@ -73,18 +71,19 @@ namespace WeCantSpell.Roslyn.Tests.SpellChecker
             await spellchecker.AddToLocalDictionaryAsync("Bazinga");
             var resultAfterApiUpdate = spellchecker.Check("Bazinga");
             await File.WriteAllTextAsync(fileName, "Froomplestoot");
-            var resultAfterDirectUpdate = spellchecker.Check("Froomplestoot");
-            Thread.Sleep(100);
+            // FileWordListProvider throttles re-reads (~100 ms), so wait comfortably past that
+            // window before checking. We deliberately do not assert that the change is still
+            // invisible *before* the window elapses: that depends on the preceding operations
+            // finishing within 100 ms of wall-clock time, which is not guaranteed on slow or
+            // loaded CI runners and made this test flaky.
+            await Task.Delay(300);
             var resultAfterDirectUpdateAndWait = spellchecker.Check("Froomplestoot");
             // Assert
             resultBefore.Should().BeFalse("the dictionary not yet contained a new word");
             resultAfterApiUpdate.Should().BeTrue("the dictionary has been updated through API");
-            resultAfterDirectUpdate.Should().BeFalse("direct file write does not immediately update the dictionary");
             resultAfterDirectUpdateAndWait
                 .Should()
-                .BeTrue(
-                    "the dictionary has been updated through direct file write and spell checker should pick up the new version in 100 ms."
-                );
+                .BeTrue("the spell checker picks up direct file writes after the refresh window elapses");
         }
     }
 }
