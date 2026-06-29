@@ -10,7 +10,7 @@ namespace WeCantSpell.Roslyn.Config
     [UsedImplicitly(ImplicitUseTargetFlags.Members)]
     public sealed class SpellCheckerOptions
     {
-        private static string[] DefaultLanguageCodes { get; set; } = new[] { "en-US" };
+        internal static string[] DefaultLanguageCodes { get; } = new[] { "en-US" };
 
         public static string[] ConfigFileNames { get; } = { ".wecantspell", ".wecantspell.json" };
 
@@ -85,18 +85,23 @@ namespace WeCantSpell.Roslyn.Config
 
         private ConfigFile? Parse(string filePath)
         {
+            var text = FileSystem.ReadAllText(filePath);
+            return text == null ? null : ParseJson(text);
+        }
+
+        internal static ConfigFile? ParseJson(string json)
+        {
             JsonSerializerSettings settings = new JsonSerializerSettings
             {
                 ContractResolver = new DefaultContractResolver
                 {
-                    NamingStrategy = new CamelCaseNamingStrategy() // Use CamelCaseNamingStrategy for camelCase naming
+                    NamingStrategy = new CamelCaseNamingStrategy(), // Use CamelCaseNamingStrategy for camelCase naming
                 },
                 // Set the following property to ignore case sensitivity during deserialization
                 // Note: This will match the property names case-insensitively but still use camelCase
                 TypeNameHandling = TypeNameHandling.Auto,
-                MetadataPropertyHandling = MetadataPropertyHandling.ReadAhead
+                MetadataPropertyHandling = MetadataPropertyHandling.ReadAhead,
             };
-            string json = FileSystem.ReadAllText(filePath);
             ConfigFile? config = JsonConvert.DeserializeObject<ConfigFile>(json, settings);
             return config;
         }

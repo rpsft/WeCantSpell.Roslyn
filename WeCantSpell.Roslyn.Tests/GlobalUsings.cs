@@ -2,5 +2,6 @@
 
 global using System;
 global using System.IO;
-global using FluentAssertions;
+global using AwesomeAssertions;
+global using AwesomeAssertions.Execution;
 global using Xunit;

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using FluentAssertions.Execution;
 using WeCantSpell.Roslyn.Config;
 using WeCantSpell.Roslyn.Tests.Utilities;
 
@@ -14,9 +13,14 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp.Parsing
         public async Task CanFindErrorsInBilingualComments(string expectedWord, int expectedLine, int expectedCharacter)
         {
             var analyzer = new SpellingAnalyzerCSharp(
-                new ConfigurableSpellChecker(new SpellCheckerOptions { LanguageCodes = new HashSet<string> { "en-US", "ru-RU" } })
+                new ConfigurableSpellChecker(
+                    new SpellCheckerOptions
+                    {
+                        LanguageCodes = new HashSet<string> { "en-US", "ru-RU" },
+                    }
+                )
             );
-            
+
             var project = await ReadCodeFileAsProjectAsync("BilingualComments.Example.csx");
 
             project.Should().NotBeNull();

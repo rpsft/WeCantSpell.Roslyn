@@ -1,14 +1,19 @@
 ﻿using System.Globalization;
-using FluentAssertions.Execution;
-using FluentAssertions.Primitives;
+using AwesomeAssertions.Primitives;
 using Microsoft.CodeAnalysis;
 
 namespace WeCantSpell.Roslyn.Tests.Utilities
 {
+    [CustomAssertions]
     public class DiagnosticAssertions : ReferenceTypeAssertions<Diagnostic, DiagnosticAssertions>
     {
-        public DiagnosticAssertions(Diagnostic value)
-            : base(value) { }
+        private readonly AssertionChain _assertionChain;
+
+        public DiagnosticAssertions(Diagnostic value, AssertionChain assertionChain)
+            : base(value, assertionChain)
+        {
+            _assertionChain = assertionChain;
+        }
 
         protected override string Identifier => "diagnostic";
 
@@ -20,7 +25,7 @@ namespace WeCantSpell.Roslyn.Tests.Utilities
         {
             var actual = Subject?.Id;
 
-            Execute.Assertion
+            _assertionChain
                 .ForCondition(string.Equals(actual, expected, StringComparison.Ordinal))
                 .BecauseOf(because, becauseArgs)
                 .FailWith("Expected {context:id} to be {0}{reason}, but found {1}.", expected, actual);
@@ -35,14 +40,14 @@ namespace WeCantSpell.Roslyn.Tests.Utilities
         )
         {
             var actual = Subject?.Location.SourceTree?.FilePath;
-            Execute.Assertion
+            _assertionChain
                 .ForCondition(string.Equals(actual, expected, StringComparison.Ordinal))
                 .BecauseOf(because, becauseArgs)
                 .FailWith("Expected {context:file} to be {0}{reason}, but found {1}.", expected, actual);
 
             return new AndConstraint<DiagnosticAssertions>(this);
         }
-        
+
         private AndConstraint<DiagnosticAssertions> HaveLineSpan(
             int expectedLine,
             int expectedCharacter,
@@ -53,40 +58,43 @@ namespace WeCantSpell.Roslyn.Tests.Utilities
         {
             var location = Subject?.Location;
 
-            Execute.Assertion
+            _assertionChain
                 .ForCondition(location != null)
                 .BecauseOf(because, becauseArgs)
                 .FailWith("Expected {context:diagnostic} to have a location.");
 
-            var actual = location!.GetLineSpan();
+            if (_assertionChain.Succeeded)
+            {
+                var actual = location!.GetLineSpan();
 
-            Execute.Assertion
-                .ForCondition(
-                    actual.StartLinePosition.Line == expectedLine - 1
-                        && actual.StartLinePosition.Character == expectedCharacter - 1
-                )
-                .BecauseOf(because, becauseArgs)
-                .FailWith(
-                    "Expected {context:span} to start at {0}:{1}{reason}, but found {2}:{3}.",
-                    expectedLine,
-                    expectedCharacter,
-                    actual.StartLinePosition.Line + 1,
-                    actual.StartLinePosition.Character + 1
-                );
+                _assertionChain
+                    .ForCondition(
+                        actual.StartLinePosition.Line == expectedLine - 1
+                            && actual.StartLinePosition.Character == expectedCharacter - 1
+                    )
+                    .BecauseOf(because, becauseArgs)
+                    .FailWith(
+                        "Expected {context:span} to start at {0}:{1}{reason}, but found {2}:{3}.",
+                        expectedLine,
+                        expectedCharacter,
+                        actual.StartLinePosition.Line + 1,
+                        actual.StartLinePosition.Character + 1
+                    );
 
-            var actualLength = location.SourceSpan.Length;
-            Execute.Assertion
-                .ForCondition(actualLength == expectedLength)
-                .BecauseOf(because, becauseArgs)
-                .FailWith(
-                    "Expected {context:span} to have lentgth {0}{reason}, but found {1}.",
-                    expectedLength,
-                    actualLength
-                );
+                var actualLength = location.SourceSpan.Length;
+                _assertionChain
+                    .ForCondition(actualLength == expectedLength)
+                    .BecauseOf(because, becauseArgs)
+                    .FailWith(
+                        "Expected {context:span} to have length {0}{reason}, but found {1}.",
+                        expectedLength,
+                        actualLength
+                    );
+            }
 
             return new AndConstraint<DiagnosticAssertions>(this);
         }
-        
+
         public AndConstraint<DiagnosticAssertions> HaveLineLocation(
             int expectedLine,
             int expectedCharacter,
@@ -95,11 +103,8 @@ namespace WeCantSpell.Roslyn.Tests.Utilities
             string because = "",
             params object[] becauseArgs
         ) =>
-            HaveLineSpan(expectedLine, expectedCharacter, expectedLength, because, becauseArgs).And.BeFromFileName(
-                expectedFileName,
-                because,
-                becauseArgs
-            );
+            HaveLineSpan(expectedLine, expectedCharacter, expectedLength, because, becauseArgs)
+                .And.BeFromFileName(expectedFileName, because, becauseArgs);
 
         public AndConstraint<DiagnosticAssertions> HaveMessageContaining(
             string expectedSubstring,
@@ -109,18 +114,21 @@ namespace WeCantSpell.Roslyn.Tests.Utilities
         {
             var message = Subject?.GetMessage(CultureInfo.InvariantCulture);
 
-            Execute.Assertion
+            _assertionChain
                 .ForCondition(message != null)
                 .BecauseOf(because, becauseArgs)
                 .FailWith("Expected {context:invariant message} to not be null.");
 
-            Execute.Assertion
-                .ForCondition(message!.Contains(expectedSubstring))
-                .BecauseOf(because, becauseArgs)
-                .FailWith(
-                    "Expected {context:invariant message} to contain {0}{reason}, but did not.",
-                    expectedSubstring
-                );
+            if (_assertionChain.Succeeded)
+            {
+                _assertionChain
+                    .ForCondition(message!.Contains(expectedSubstring))
+                    .BecauseOf(because, becauseArgs)
+                    .FailWith(
+                        "Expected {context:invariant message} to contain {0}{reason}, but did not.",
+                        expectedSubstring
+                    );
+            }
 
             return new AndConstraint<DiagnosticAssertions>(this);
         }

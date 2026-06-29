@@ -1,6 +1,5 @@
 ﻿using System.Linq;
 using System.Threading.Tasks;
-using FluentAssertions.Execution;
 using WeCantSpell.Roslyn.Tests.Utilities;
 
 namespace WeCantSpell.Roslyn.Tests.Integration.CSharp.Parsing
@@ -8,7 +7,7 @@ namespace WeCantSpell.Roslyn.Tests.Integration.CSharp.Parsing
     public class CatchDeclarationSpellingTests : CSharpParsingTestBase
     {
         [Fact]
-        public async Task can_check_spelling_of_catchs()
+        public async Task can_check_spelling_of_catches()
         {
             var analyzer = new SpellingAnalyzerCSharp(new WrongWordChecker("bad", "Value"));
             var project = await ReadCodeFileAsProjectAsync("Catch.SimpleExamples.csx");

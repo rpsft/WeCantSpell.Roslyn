@@ -1,8 +1,20 @@
 <Project>
+  <!-- Version fallback for local builds; CI overrides via -p:Version=$PACKAGE_VERSION -->
   <PropertyGroup>
-    <Version>2.0.8-beta</Version>
-    <PackageVersion>$(Version)</PackageVersion>
-    <NuspecProperties>version=$(Version)</NuspecProperties>
+    <Version Condition="'$(Version)' == ''">0.0.0-local</Version>
+  </PropertyGroup>
+
+  <!-- Detect CI environment (GitLab CI or TeamCity) -->
+  <PropertyGroup>
+    <IsCI Condition="'$(CI_JOB_ID)'!='' Or '$(TEAMCITY_BUILD_PROPERTIES_FILE)'!=''">true</IsCI>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(IsCI)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <!-- S1135 = TODO comment warning; suppress in CI — developers see it locally -->
+    <NoWarn>$(NoWarn);S1135</NoWarn>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -11,11 +23,43 @@
       $(BuildDependsOn)
     </BuildDependsOn>
   </PropertyGroup>
-  
-  <Target Name="InstallHusky" Condition="!Exists('$(MSBuildThisFileDirectory).husky/_/husky.sh')">
+
+  <Target Name="InstallHusky" Condition="!Exists('$(MSBuildThisFileDirectory).husky/_/husky.sh') And '$(IsCI)'!='true'">
     <Message Importance="high" Text="Installing Husky into $(MSBuildThisFileDirectory).husky/_/husky.sh" />
     <Exec Command="dotnet tool restore" WorkingDirectory="$(MSBuildThisFileDirectory)" StandardOutputImportance="High" StandardErrorImportance="High" />
     <Exec Command="dotnet husky install" WorkingDirectory="$(MSBuildThisFileDirectory)" StandardOutputImportance="High" StandardErrorImportance="High" />
   </Target>
+
+  <!-- Auto-detect test projects by naming convention -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests'))">
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <AssemblyAttribute Include="System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="JunitXml.TestLogger" Version="3.1.12" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(IsTestProject)' == 'true'">
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <SignAssembly>false</SignAssembly>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <DebugType>Full</DebugType>
+  </PropertyGroup>
+
+  <!-- NuGet package vulnerability auditing -->
+  <PropertyGroup>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
+    <WarningsAsErrors Condition="'$(ContinuousIntegrationBuild)' == 'true'">$(WarningsAsErrors);NU1900;NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
 
 </Project>

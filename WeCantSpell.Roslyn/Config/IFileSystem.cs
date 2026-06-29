@@ -8,7 +8,7 @@ namespace WeCantSpell.Roslyn.Config
         string FileSystemType { get; }
         string? GetDirectoryName(string path);
         string? GetParentDirectory(string directory);
-        string ReadAllText(string filePath);
+        string? ReadAllText(string filePath);
         string CombinePath(string directoryName, string fileName);
         bool FileExists(string tryFilePath);
         Stream ReadStream(string path);

@@ -1,0 +1,66 @@
+# Конфигурация GitVersion для проектов, следующих процессу разработки GitFlow.
+# Описание процесса: https://confluence.rapidsoft.ru/x/AYMR
+#
+# Стратегии инкремента версии по типу ветки:
+#   hotfix/*        — исправление бага в master/support          → Patch  (встроено по умолчанию)
+#   bugfix/*        — исправление бага в develop/release         → Patch  (задано явно ниже)
+#   feature/*       — новая функциональность от develop          → Minor  (встроено по умолчанию)
+#   dev/*           — подзадачи фичи, ответвляются от feature    → Inherit от feature (задано явно ниже)
+#   release/*       — релизная ветка от develop                  → Minor  (встроено по умолчанию)
+#   support/*       — поддержка старой версии от master          → Patch  (встроено по умолчанию)
+#   documentation/* — документация от develop/feature           → Inherit (задано явно ниже)
+
+branches:
+  # Ветки bugfix/* создаются для исправления багов в develop или release.
+  # Без явной конфигурации GitVersion относит их к типу unknown и вычисляет
+  # инкремент от develop (Minor), что даёт неожиданный результат — например,
+  # 1.17.0 вместо ожидаемого 1.16.1. Явное указание Patch исправляет это.
+  bugfix:
+    mode: ManualDeployment
+    label: '{BranchName}'
+    increment: Patch
+    prevent-increment:
+      when-current-commit-tagged: false
+    regex: ^bugfix(es)?[/-](?<BranchName>.+)
+    source-branches:
+    - main
+    - develop
+    - release
+    - support
+    is-source-branch-for: []
+    is-main-branch: false
+    pre-release-weight: 30000
+
+  # Ветки dev/* используются для подзадач внутри фичи.
+  # Без явной конфигурации попадают в unknown и могут некорректно
+  # разрешать источник. Явная конфигурация ограничивает source-branches
+  # ветками feature и develop.
+  dev:
+    mode: ManualDeployment
+    label: '{BranchName}'
+    increment: Inherit
+    prevent-increment:
+      when-current-commit-tagged: false
+    regex: ^dev[/-](?<BranchName>.+)
+    source-branches:
+    - feature
+    - develop
+    is-source-branch-for: []
+    is-main-branch: false
+    pre-release-weight: 30000
+
+  # Ветки documentation/* используются для изменений документации.
+  # Версия наследуется от родительской ветки (develop или feature).
+  documentation:
+    mode: ManualDeployment
+    label: '{BranchName}'
+    increment: Inherit
+    prevent-increment:
+      when-current-commit-tagged: false
+    regex: ^documentation[/-](?<BranchName>.+)
+    source-branches:
+    - develop
+    - feature
+    is-source-branch-for: []
+    is-main-branch: false
+    pre-release-weight: 30000

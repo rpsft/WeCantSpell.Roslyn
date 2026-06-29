@@ -2,6 +2,7 @@ using System;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Threading;
 using JetBrains.Annotations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -103,10 +104,19 @@ namespace WeCantSpell.Roslyn
                 // GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics
                 GeneratedCodeAnalysisFlags.None
             );
-            context.RegisterSyntaxTreeAction(HandleSyntaxTree);
+            context.RegisterCompilationStartAction(OnCompilationStart);
         }
 
-        private void HandleSyntaxTree(SyntaxTreeAnalysisContext context)
+        private void OnCompilationStart(CompilationStartAnalysisContext context)
+        {
+            // Read the AdditionalFiles set once per compilation. Capturing the resulting index in the
+            // per-tree action makes the analyzer depend on AdditionalFiles content, so Roslyn re-runs
+            // it (with fresh content) whenever a dictionary or config file is edited.
+            var dictionaryIndex = AdditionalFilesDictionaryIndex.Build(context.Options.AdditionalFiles);
+            context.RegisterSyntaxTreeAction(treeContext => HandleSyntaxTree(treeContext, dictionaryIndex));
+        }
+
+        private void HandleSyntaxTree(SyntaxTreeAnalysisContext context, AdditionalFilesDictionaryIndex dictionaryIndex)
         {
             SyntaxNode root = context.Tree.GetRoot(context.CancellationToken);
             if (context.CancellationToken.IsCancellationRequested)
@@ -114,7 +124,7 @@ namespace WeCantSpell.Roslyn
                 return;
             }
 
-            var spellChecker = GetSpellChecker(context.Tree.FilePath);
+            var spellChecker = GetSpellChecker(context.Tree.FilePath, dictionaryIndex, context.CancellationToken);
 
             var walker = new SpellCheckCSharpWalker(spellChecker, ReportMistakeAsDiagnostic);
             walker.Visit(root);
@@ -125,11 +135,22 @@ namespace WeCantSpell.Roslyn
             }
         }
 
-        private ISpellChecker GetSpellChecker(string treeFilePath)
+        private ISpellChecker GetSpellChecker(
+            string treeFilePath,
+            AdditionalFilesDictionaryIndex dictionaryIndex,
+            CancellationToken cancellationToken
+        )
         {
             if (InvariantSpellChecker != null)
                 return InvariantSpellChecker;
 
+            // Prefer dictionaries declared as AdditionalFiles (reliable cache invalidation).
+            var fromAdditionalFiles = dictionaryIndex.GetSpellChecker(treeFilePath, cancellationToken);
+            if (fromAdditionalFiles != null)
+                return fromAdditionalFiles;
+
+            // Fall back to the legacy on-disk directory walk for consumers that have not declared the
+            // dictionaries as AdditionalFiles. This path keeps the previous (build-server-cached) behaviour.
             SpellCheckerOptions checkerOptions = new SpellCheckerOptions(_fileSystem, treeFilePath);
             return SpellCheckerPool.Shared.Get(checkerOptions);
         }
@@ -154,7 +175,7 @@ namespace WeCantSpell.Roslyn
                 SpellingMistakeKind.Literal => s_spellingLiteralDiagnosticDescriptor,
                 SpellingMistakeKind.Comment => s_spellingCommentDiagnosticDescriptor,
                 SpellingMistakeKind.Documentation => s_spellingDocumentationDiagnosticDescriptor,
-                _ => throw new NotSupportedException()
+                _ => throw new NotSupportedException(),
             };
         }
 
